@@ -3,7 +3,6 @@ from models import *
 from flask_cors import cross_origin
 import binascii, base64
 
-
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -863,4 +862,3 @@ def get_posted():
         output.append(dict)
 
     return jsonify({'submissions': output})
-

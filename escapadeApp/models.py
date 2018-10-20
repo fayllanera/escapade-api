@@ -1,7 +1,5 @@
 from escapadeApp import db
-
 import datetime
-
 
 
 class User(db.Model):
@@ -18,7 +16,6 @@ class User(db.Model):
     address = db.Column(db.TEXT())
     birthday = db.Column(db.DATE)
     role_id=db.Column(db.String(2))
-
     write = db.relationship('Write', backref='write_User')
 
 class Write(db.Model):
@@ -102,4 +99,3 @@ class Photo(db.Model):
     def __init__(self, username='', photo=''):
         self.username = username
         self.photo = photo
-
