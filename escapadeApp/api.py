@@ -30,6 +30,7 @@ def token_required(f):
 @app.route('/api/register', methods=['POST'])
 def register_user():
     data = request.get_json()
+
     hashed_password = generate_password_hash(data['password'], method='sha256')
 
     new_user = User(public_id=str(uuid.uuid4()), username=data['username'], password_hash=hashed_password, firstname=data['firstname'], middlename=data['middlename'],
@@ -43,6 +44,16 @@ def register_user():
 @app.route('/api/login/', methods=['GET'])
 def login():
     auth = request.authorization
+    admin = User.query.filter_by(username='admin').first()
+    if admin is None:
+        hashed_password = generate_password_hash('password', method='sha256')
+        add_admin = User(public_id=str(uuid.uuid4()), username='admin', password_hash=hashed_password,
+                        firstname='admin', middlename='admin',
+                        lastname='admin', contact='09955890556', address='admin',
+                        birthday='1998-08-27', role_id=1,
+                        age=99)
+        db.session.add(add_admin)
+        db.session.commit()
 
     if not auth or not auth.username or not auth.password:
         return make_response('Could not verify', 401, {'WWW-Authenticate':'Basic realm = "Login required!"'})
@@ -53,8 +64,9 @@ def login():
         return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm = "Login required!"'})
 
     if check_password_hash(user.password_hash, auth.password):
-        token = jwt.encode({'public_id':user.public_id, 'exp':datetime.datetime.utcnow()+datetime.timedelta(minutes=90)}, app.config['SECRET_KEY'])
-
+        token = jwt.encode(
+            {'public_id': user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=90)},
+            app.config['SECRET_KEY'])
         print 'Token generated!'
         return jsonify({'status':'ok', 'token': token.decode('UTF-8'), 'role_id':user.role_id, 'public_id':user.public_id,'message':'login successful!'})
 
@@ -834,6 +846,287 @@ def get_posted():
         dict['photo'] = base64.b64encode(destination.photo)
         dict['region_id'] = destination.region_id
         dict['write_id'] = article.write_id
+        dict['location'] = destination.location
+        dict['date'] = article.date.strftime('%B %d, %Y')
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        region = Region.query.filter_by(region_id=destination.region_id).first()
+        dict['region_name'] = region.name
+        user = User.query.filter_by(username=article.author_name).first()
+        dict['author'] = user.firstname + ' ' + user.lastname
+        dict['status'] = article.status
+        output.append(dict)
+    for article in articles3:
+        attraction = Attraction.query.filter_by(write_id=article.write_id).first()
+        dict = {}
+        dict['type'] = 'Attraction'
+        dict['name'] = attraction.name
+        dict['content'] = attraction.content
+        dict['photo'] = base64.b64encode(attraction.photo)
+        dict['region_id'] = attraction.region_id
+        dict['write_id'] = attraction.write_id
+        destination = Destination.query.filter_by(destination_id=attraction.destination_id).first()
+        if destination is not None:
+            dict['destination_id'] = attraction.destination_id
+        region = Region.query.filter_by(region_id=attraction.region_id).first()
+        dict['region_name'] = region.name
+        dict['date'] = article.date.strftime('%B %d, %Y')
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        user = User.query.filter_by(username=article.author_name).first()
+        dict['author'] = user.firstname + ' ' + user.lastname
+        dict['status'] = article.status
+        output.append(dict)
+
+    return jsonify({'submissions': output})
+
+@app.route('/get/all/attractions')
+@cross_origin('*')
+def get_all_attractions():
+    articles3 = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id).filter(
+        Write.status == 'Posted').all()
+    output = []
+    for article in articles3:
+        attraction = Attraction.query.filter_by(write_id=article.write_id).first()
+        dict = {}
+        dict['type'] = 'Attraction'
+        dict['name'] = attraction.name
+        dict['content'] = attraction.content
+        dict['photo'] = base64.b64encode(attraction.photo)
+        dict['region_id'] = attraction.region_id
+        dict['write_id'] = attraction.write_id
+        destination = Destination.query.filter_by(destination_id=attraction.destination_id).first()
+        if destination is not None:
+            dict['destination_id'] = attraction.destination_id
+        region = Region.query.filter_by(region_id=attraction.region_id).first()
+        dict['region_name'] = region.name
+        dict['date'] = article.date.strftime('%B %d, %Y')
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        user = User.query.filter_by(username=article.author_name).first()
+        dict['author'] = user.firstname + ' ' + user.lastname
+        dict['status'] = article.status
+        output.append(dict)
+    return jsonify({'posts': output})
+
+@app.route('/get/all/destinations')
+@cross_origin('*')
+def get_all_destinations():
+    articles2 = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).filter(
+        Write.status == 'Posted').all()
+    output = []
+    for article in articles2:
+        destination = Destination.query.filter_by(write_id=article.write_id).first()
+        dict = {}
+        dict['type'] = 'Destination'
+        dict['name'] = destination.name
+        dict['content'] = destination.content
+        dict['photo'] = base64.b64encode(destination.photo)
+        dict['region_id'] = destination.region_id
+        dict['write_id'] = article.write_id
+        dict['date'] = article.date.strftime('%B %d, %Y')
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        region = Region.query.filter_by(region_id=destination.region_id).first()
+        dict['region_name'] = region.name
+        dict['location'] = destination.location
+        user = User.query.filter_by(username=article.author_name).first()
+        dict['author'] = user.firstname + ' ' + user.lastname
+        dict['status'] = article.status
+        output.append(dict)
+    return jsonify({'posts': output})
+
+@app.route('/get/all/region')
+@cross_origin('*')
+def get_all_region():
+    articles = Write.query.join(Region).filter(Write.write_id == Region.write_id).filter(Write.status == 'Posted').all()
+    output = []
+    for article in articles:
+        region = Region.query.filter_by(write_id=article.write_id).first()
+        dict = {}
+        dict['type'] = 'Region'
+        dict['name'] = region.name
+        dict['content'] = region.content
+        dict['photo'] = base64.b64encode(region.photos)
+        dict['region_id'] = region.region_id
+        dict['write_id'] = article.write_id
+        dict['date'] = article.date.strftime('%B %d, %Y')
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        user = User.query.filter_by(username=article.author_name).first()
+        dict['author'] = user.firstname + ' ' + user.lastname
+        dict['status'] = article.status
+        output.append(dict)
+    return jsonify({'posts': output})
+
+@app.route('/get/region')
+@cross_origin('*')
+def get_region():
+    data = request.get_json()
+    output = []
+    dict = {}
+    region = Region.query.filter_by(name=data['title']).first()
+    article = Write.query.filter_by(write_id=region.write_id).first()
+    dict['type'] = 'Region'
+    dict['name'] = region.name
+    dict['content'] = region.content
+    dict['photo'] = base64.b64encode(region.photos)
+    dict['region_id'] = region.region_id
+    dict['write_id'] = article.write_id
+    dict['date'] = article.date.strftime('%B %d, %Y')
+    dict['author_id'] = article.author_id
+    dict['author_name'] = article.author_name
+    user = User.query.filter_by(username=article.author_name).first()
+    dict['author'] = user.firstname + ' ' + user.lastname
+    dict['status'] = article.status
+    output.append(dict)
+    return jsonify({'post': output})
+
+@app.route('/get/destination')
+@cross_origin('*')
+def get_destination():
+    data = request.get_json()
+    output = []
+    dict = {}
+    destination = Destination.query.filter_by(name=data['title']).first()
+    article = Write.query.filter_by(write_id=destination.write_id).first()
+    dict['type'] = 'Destination'
+    dict['name'] = destination.name
+    dict['content'] = destination.content
+    dict['photo'] = base64.b64encode(destination.photo)
+    dict['region_id'] = destination.region_id
+    region = Region.query.filter_by(region_id=destination.region_id).first()
+    dict['region_name'] = region.name
+    dict['write_id'] = article.write_id
+    dict['location'] = destination.location
+    dict['date'] = article.date.strftime('%B %d, %Y')
+    dict['author_id'] = article.author_id
+    dict['author_name'] = article.author_name
+    user = User.query.filter_by(username=article.author_name).first()
+    dict['author'] = user.firstname + ' ' + user.lastname
+    dict['status'] = article.status
+    output.append(dict)
+    return jsonify({'post': output})
+
+@app.route('/get/attraction')
+@cross_origin('*')
+def get_attraction():
+    data = request.get_json()
+    output = []
+    dict = {}
+    attraction = Attraction.query.filter_by(name=data['title']).first()
+    article = Write.query.filter_by(write_id=attraction.write_id).first()
+    dict['type'] = 'Attraction'
+    dict['name'] = attraction.name
+    dict['content'] = attraction.content
+    dict['photo'] = base64.b64encode(attraction.photo)
+    dict['region_id'] = attraction.region_id
+    dict['write_id'] = article.write_id
+    region = Region.query.filter_by(region_id=attraction.region_id).first()
+    dict['region_name'] = region.name
+    dict['date'] = article.date.strftime('%B %d, %Y')
+    dict['author_id'] = article.author_id
+    dict['author_name'] = article.author_name
+    user = User.query.filter_by(username=article.author_name).first()
+    dict['author'] = user.firstname + ' ' + user.lastname
+    dict['status'] = article.status
+    output.append(dict)
+    return jsonify({'post': output})
+
+@app.route('/get/all/user')
+@cross_origin('*')
+def get_all_users():
+    output = []  
+    users = User.query.filter((User.role_id == str(2)) | (User.role_id == str(3))).all()
+    for user in users:
+        dict = {}
+        dict['id'] = user.id
+        dict['public_id'] = user.public_id
+        dict['username'] = user.username
+        dict['firstname'] = user.firstname
+        dict['middlename'] = user.middlename
+        dict['fullname'] = user.firstname+ ' ' + user.middlename + ' ' + user.lastname
+        dict['age'] = user.age
+        dict['contact'] = user.contact
+        dict['address'] = user.address
+        dict['role_id'] = user.role_id
+        output.append(dict)
+    return jsonify({'status': 'ok', 'entries': output, 'count': len(output)})
+
+@app.route('/api/promotedemote', methods=['POST'])
+@cross_origin('*')
+def promote_and_demote():
+    data = request.get_json()
+    user = User.query.filter_by(id = data['userid']).first()
+
+    if data['response'] == 'yes':
+        user.role_id = 2
+        db.session.commit()
+
+    else:
+        user.role_id = 3
+        db.session.commit()
+
+    return jsonify({'message': 'Registered successfully!'})
+
+@app.route('/api/profile', methods=['GET'])
+@cross_origin('*')
+def profile():
+    print('gdsf')
+    data = request.get_json()
+    print(data)
+    user = User.query.filter_by(username=data['username']).first()
+    dict = {}
+    output = []
+    dict['firstname'] = user.firstname
+    dict['middlename'] = user.middlename
+    dict['lastname'] = user.lastname
+    dict['age'] = user.age
+    dict['contact'] = user.contact
+    dict['birthday'] = user.birthday
+    output.append(dict)
+
+    print('Good')
+    return jsonify({'infos': output})
+
+
+@app.route('/get_yourpost')
+@cross_origin('*')
+def your_post():
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    authorid = user.id
+    print authorid
+    articles = Write.query.join(Region).filter(Write.write_id == Region.write_id).filter((Write.status == 'Posted') & (Write.author_id == authorid)).all()
+    articles2 = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).filter((Write.status == 'Posted') & (Write.author_id == authorid)).all()
+    articles3 = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id and Write.author_id == authorid).filter(
+        Write.status == 'Posted').all()
+    output = []
+    for article in articles:
+        region = Region.query.filter_by(write_id=article.write_id).first()
+        dict = {}
+        dict['type'] = 'Region'
+        dict['name'] = region.name
+        dict['content'] = region.content
+        dict['photo'] = base64.b64encode(region.photos)
+        dict['region_id'] = region.region_id
+        dict['write_id'] = article.write_id
+        dict['date'] = article.date.strftime('%B %d, %Y')
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        user = User.query.filter_by(username=article.author_name).first()
+        dict['author'] = user.firstname + ' ' + user.lastname
+        dict['status'] = article.status
+        output.append(dict)
+    for article in articles2:
+        destination = Destination.query.filter_by(write_id=article.write_id).first()
+        dict = {}
+        dict['type'] = 'Destination'
+        dict['name'] = destination.name
+        dict['content'] = destination.content
+        dict['photo'] = base64.b64encode(destination.photo)
+        dict['region_id'] = destination.region_id
+        dict['write_id'] = article.write_id
         dict['date'] = article.date.strftime('%B %d, %Y')
         dict['author_id'] = article.author_id
         dict['author_name'] = article.author_name
@@ -862,3 +1155,4 @@ def get_posted():
         output.append(dict)
 
     return jsonify({'submissions': output})
+
