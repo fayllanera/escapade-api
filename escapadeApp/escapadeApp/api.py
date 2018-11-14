@@ -127,7 +127,7 @@ def writer_submit_attraction():
     get_write = Write.query.filter((Write.author_id == user.id) & (Write.author_name == user.username)).order_by(Write.write_id.desc()).first()
     photo = Photo.query.filter_by(username=user.username).order_by(Photo.photo_id.desc()).first()
     region = Region.query.filter_by(name=data['region']).first()
-    destination = Destination.query.filter_by(name=data['destination']).first()
+    destination = Destination.query.filter_by(location=data['destination']).first()
     if region is None:
         return jsonify({'error': 'failed to add'})
     elif destination is None:
@@ -293,6 +293,70 @@ def submissions():
         output.append(dict)
     return jsonify({'submissions': output})
 
+@app.route('/api/writer/submissions/returned', methods=['GET', 'POST'])
+@cross_origin('*')
+def returned_submissions():
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    articles = Write.query.join(Region).filter(Write.write_id == Region.write_id).filter(
+        (Write.status == 'Checked') & (Write.author_id == user.id)).all()
+    articles_destination = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).filter(
+        (Write.status == 'Checked') & (Write.author_id == user.id)).all()
+    articles_attraction = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id).filter(
+        (Write.status == 'Checked') & (Write.author_id == user.id)).all()
+    output = []
+    for article in articles:
+        region = Region.query.filter_by(write_id=article.write_id).first()
+        dict = {}
+        dict['type'] = 'Region'
+        dict['name'] = region.name
+        dict['content'] = region.content
+        dict['photo'] = base64.b64encode(region.photos)
+        dict['region_id'] = region.region_id
+        dict['write_id'] = article.write_id
+        dict['date'] = article.date
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        dict['status'] = article.status
+        if article.comment is not None:
+            dict['comment'] = article.comment
+        output.append(dict)
+    for article in articles_destination:
+        destination = Destination.query.filter_by(write_id=article.write_id).first()
+        dict = {}
+        dict['type'] = 'Destination'
+        dict['name'] = destination.name
+        dict['content'] = destination.content
+        dict['photo'] = base64.b64encode(destination.photo)
+        dict['location'] = destination.location
+        dict['region_id'] = destination.region_id
+        dict['write_id'] = article.write_id
+        dict['date'] = article.date
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        dict['status'] = article.status
+        if article.comment is not None:
+            dict['comment'] = article.comment
+        output.append(dict)
+    for article in articles_attraction:
+        destination = Attraction.query.filter_by(write_id=article.write_id).first()
+        dict = {}
+        dict['type'] = 'Attraction'
+        dict['name'] = destination.name
+        dict['content'] = destination.content
+        dict['photo'] = base64.b64encode(destination.photo)
+        dict['location'] = destination.location
+        dict['region_id'] = destination.region_id
+        dict['write_id'] = article.write_id
+        dict['date'] = article.date
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        dict['status'] = article.status
+        if article.comment is not None:
+            dict['comment'] = article.comment
+        output.append(dict)
+    return jsonify({'submissions': output})
+
 @app.route('/api/writer/drafts', methods=['GET', 'POST'])
 @cross_origin('*')
 def drafts():
@@ -372,7 +436,8 @@ def editor_submissions():
         dict['write_id'] = article.write_id
         dict['date'] = article.date
         dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
+        user2 = User.query.filter_by(id=article.author_id).first()
+        dict['author_name'] = user2.firstname + ' ' + user2.lastname
         dict['status'] = article.status
         output.append(dict)
     for article in articles2:
@@ -386,7 +451,7 @@ def editor_submissions():
         dict['write_id'] = article.write_id
         dict['date'] = article.date
         dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
+        dict['author_name'] = user2.firstname + ' ' + user2.lastname
         dict['status'] = article.status
         output.append(dict)
     for article in articles3:
@@ -403,7 +468,7 @@ def editor_submissions():
             dict['destination_id'] = attraction.destination_id
         dict['date'] = article.date
         dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
+        dict['author_name'] = user2.firstname + ' ' + user2.lastname
         dict['status'] = article.status
         output.append(dict)
 
@@ -426,7 +491,10 @@ def edit_submissions():
     dict['date'] = article.date
     dict['author_id'] = article.author_id
     dict['author_name'] = article.author_name
+    user2 = User.query.filter_by(id=article.author_id).first()
+    dict['author_name'] = user2.firstname + ' ' + user2.lastname
     dict['status'] = article.status
+    dict['comment'] = article.comment
     output.append(dict)
     return jsonify({'submission': output})
 
@@ -451,6 +519,7 @@ def edit_submissions_destination():
     dict['author_id'] = article.author_id
     dict['author_name'] = article.author_name
     dict['status'] = article.status
+    dict['comment'] = article.comment
     output.append(dict)
     return jsonify({'submission': output})
 
@@ -470,7 +539,7 @@ def edit_submissions_attraction():
     if attraction.destination_id is not None:
         destination = Destination.query.filter_by(destination_id = attraction.destination_id).first()
         dict['destination_id'] = attraction.destination_id
-        dict['destination'] = destination.name
+        dict['destination'] = destination.location
     region = Region.query.filter_by(region_id=attraction.region_id).first()
     dict['region'] = region.name
     dict['location'] = attraction.location
@@ -479,12 +548,32 @@ def edit_submissions_attraction():
     dict['author_id'] = article.author_id
     dict['author_name'] = article.author_name
     dict['status'] = article.status
+    dict['comment'] = article.comment
     output.append(dict)
     return jsonify({'submission': output})
 
 @app.route('/api/writer/submit/draft', methods=['GET',  'POST'])
 @cross_origin('*')
 def submit_draft():
+    print('gdsf')
+    data = request.get_json()
+    print(data)
+    user = User.query.filter_by(username=data['username']).first()
+    get_write = Write.query.filter_by(write_id=data['write_id']).first()
+    photo = Photo.query.filter_by(username=user.username).order_by(Photo.photo_id.desc()).first()
+    region = Region.query.filter_by(write_id=get_write.write_id).first()
+    region.name=data['name']
+    region.content=data['content']
+    region.photos=photo.photo
+    get_write.status='Submitted'
+    get_write.date=datetime.datetime.today()
+    db.session.commit()
+    print('Good')
+    return jsonify({'message': 'Added successfully!'})
+
+@app.route('/api/writer/submit/region2', methods=['GET',  'POST'])
+@cross_origin('*')
+def submit_region2():
     print('gdsf')
     data = request.get_json()
     print(data)
@@ -523,6 +612,28 @@ def submit_draft_destination():
     print('Good')
     return jsonify({'message': 'Added successfully!'})
 
+@app.route('/api/writer/submit/destination2', methods=['GET',  'POST'])
+@cross_origin('*')
+def submit_draft_destination2():
+    print('gdsf')
+    data = request.get_json()
+    print(data)
+    user = User.query.filter_by(username=data['username']).first()
+    get_write = Write.query.filter_by(write_id=data['write_id']).first()
+    photo = Photo.query.filter_by(username=user.username).order_by(Photo.photo_id.desc()).first()
+    destination = Destination.query.filter_by(write_id=get_write.write_id).first()
+    destination.name=data['name']
+    destination.content=data['content']
+    destination.photo=photo.photo
+    destination.location = data['location']
+    region = Region.query.filter_by(name=data['region']).first()
+    destination.region_id = region.region_id
+    get_write.status='Submitted'
+    get_write.date=datetime.datetime.today()
+    db.session.commit()
+    print('Good')
+    return jsonify({'message': 'Added successfully!'})
+
 @app.route('/api/writer/submit/draft-attraction', methods=['GET',  'POST'])
 @cross_origin('*')
 def submit_draft_attraction():
@@ -539,13 +650,40 @@ def submit_draft_attraction():
     attraction.location = data['location']
     region = Region.query.filter_by(name=data['region']).first()
     attraction.region_id = region.region_id
-    destination = Destination.query.filter_by(name=data['destination']).first()
+    destination = Destination.query.filter_by(location=data['destination']).first()
     if destination is not None:
         attraction.destination_id = destination.destination_id
     else:
         attraction.destination_id = None
     get_write.status='Submitted'
     get_write.date=datetime.datetime.today()
+    db.session.commit()
+    print('Good')
+    return jsonify({'message': 'Added successfully!'})
+
+@app.route('/api/writer/submit/attraction2', methods=['GET',  'POST'])
+@cross_origin('*')
+def submit_return2():
+    print('gdsf')
+    data = request.get_json()
+    print(data)
+    user = User.query.filter_by(username=data['username']).first()
+    get_write = Write.query.filter_by(write_id=data['write_id']).first()
+    photo = Photo.query.filter_by(username=user.username).order_by(Photo.photo_id.desc()).first()
+    attraction = Attraction.query.filter_by(write_id=get_write.write_id).first()
+    attraction.name = data['name']
+    attraction.content = data['content']
+    attraction.photo = photo.photo
+    attraction.location = data['location']
+    region = Region.query.filter_by(name=data['region']).first()
+    attraction.region_id = region.region_id
+    destination = Destination.query.filter_by(location=data['destination']).first()
+    if destination is not None:
+        attraction.destination_id = destination.destination_id
+    else:
+        attraction.destination_id = None
+    get_write.status = 'Submitted'
+    get_write.date = datetime.datetime.today()
     db.session.commit()
     print('Good')
     return jsonify({'message': 'Added successfully!'})
@@ -663,7 +801,7 @@ def editor_submit_att():
     attraction.location = data['location']
     region = Region.query.filter_by(name=data['region']).first()
     attraction.region_id = region.region_id
-    destination = Destination.query.filter_by(name=data['destination']).first()
+    destination = Destination.query.filter_by(location=data['destination']).first()
     if destination is not None:
         attraction.destination_id = destination.destination_id
     else:
@@ -682,9 +820,7 @@ def editor_delete_reg():
     print(data)
     write = Write.query.filter_by(write_id=data['write_id']).first()
     region = Region.query.filter_by(write_id=data['write_id']).first()
-    db.session.delete(region)
-    db.session.commit()
-    db.session.delete(write)
+    write.status = 'Hidden'
     db.session.commit()
     return jsonify({'message': 'Deleted successfully!'})
 
@@ -696,6 +832,11 @@ def editor_delete_destination():
     print(data)
     write = Write.query.filter_by(write_id=data['write_id']).first()
     destination = Destination.query.filter_by(write_id=data['write_id']).first()
+    attractions = Attraction.query.filter_by(destination_id=destination.destination_id).all()
+    if attractions is not None:
+        for attraction in attractions:
+            db.session.delete(attraction)
+            db.session.commit()
     db.session.delete(destination)
     db.session.commit()
     db.session.delete(write)
@@ -766,7 +907,7 @@ def editor_edit_attraction():
     attraction.location = data['location']
     region = Region.query.filter_by(name=data['region']).first()
     attraction.region_id = region.region_id
-    destination = Destination.query.filter_by(name=data['destination']).first()
+    destination = Destination.query.filter_by(location=data['destination']).first()
     if destination is not None:
         attraction.destination_id = destination.destination_id
     else:
@@ -805,6 +946,7 @@ def get_destinations():
         destination = Destination.query.filter_by(write_id=article.write_id).first()
         dict = {}
         dict['name'] = destination.name
+        dict['location'] = destination.location
         dict['content'] = destination.content
         dict['photo'] = base64.b64encode(destination.photo)
         dict['region_id'] = destination.region_id
