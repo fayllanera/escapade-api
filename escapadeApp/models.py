@@ -1,7 +1,5 @@
 from escapadeApp import db
-
 import datetime
-
 
 
 class User(db.Model):
@@ -18,7 +16,6 @@ class User(db.Model):
     address = db.Column(db.TEXT())
     birthday = db.Column(db.DATE)
     role_id=db.Column(db.String(2))
-
     write = db.relationship('Write', backref='write_User')
 
 class Write(db.Model):
@@ -43,15 +40,15 @@ class Region(db.Model):
     region_id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.VARCHAR)
     content = db.Column(db.VARCHAR)
-    photos = db.Column(db.LargeBinary)
+    photo = db.Column(db.String)
     write_id = db.Column(db.Integer, db.ForeignKey('write.write_id'))
     destination = db.relationship('Destination', backref='destination_Region')
     attraction = db.relationship('Attraction', backref='attraction_Region')
 
-    def __init__(self, name='', content='', photos='', write_id=''):
+    def __init__(self, name='', content='', photo='', write_id=''):
         self.name = name
         self.content = content
-        self.photos = photos
+        self.photo = photo
         self.write_id = write_id
 
 class Destination(db.Model):
@@ -60,7 +57,7 @@ class Destination(db.Model):
     name = db.Column(db.VARCHAR)
     content = db.Column(db.VARCHAR)
     location = db.Column(db.VARCHAR)
-    photo = db.Column(db.LargeBinary)
+    photo = db.Column(db.String)
     write_id = db.Column(db.Integer, db.ForeignKey('write.write_id'))
     region_id = db.Column(db.Integer, db.ForeignKey('region.region_id'))
     attraction = db.relationship('Attraction', backref='attraction_Destination')
@@ -79,7 +76,7 @@ class Attraction(db.Model):
     name = db.Column(db.VARCHAR)
     content = db.Column(db.VARCHAR)
     location = db.Column(db.VARCHAR)
-    photo = db.Column(db.LargeBinary)
+    photo = db.Column(db.String)
     region_id = db.Column(db.Integer, db.ForeignKey('region.region_id'))
     destination_id = db.Column(db.Integer, db.ForeignKey('destination.destination_id'), nullable=True)
     write_id = db.Column(db.Integer, db.ForeignKey('write.write_id'))
@@ -96,10 +93,11 @@ class Attraction(db.Model):
 class Photo(db.Model):
     __tablename__ = 'Photo'
     photo_id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.VARCHAR)
-    photo = db.Column(db.LargeBinary)
+    public_id = db.Column(db.VARCHAR)
+    secure_url = db.Column(db.String)
+    url = db.Column(db.String)
 
-    def __init__(self, username='', photo=''):
-        self.username = username
-        self.photo = photo
-
+    def __init__(self, public_id='', secure_url='', url=''):
+        self.public_id = public_id
+        self.secure_url = secure_url
+        self.url = url
