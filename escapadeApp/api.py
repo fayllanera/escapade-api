@@ -1655,7 +1655,7 @@ def get_notifications():
         dict['fullname'] = user.firstname + ' ' + user.lastname
         dict['profile'] = user.profile
         dict['write_id'] = notification.write_id
-        dict['date'] = notification.date.strftime('%b %d, %Y at %I:%M %p')
+        dict['date'] = notification.date.strftime('%d/%m/%y %H:%M')
         if notification.last_open is None:
             dict['unread'] = 'True'
         else:
@@ -1700,7 +1700,7 @@ def get_notifications_writer():
         dict['fullname'] = user.firstname + ' ' + user.lastname
         dict['profile'] = user.profile
         dict['write_id'] = notification.write_id
-        dict['date'] = notification.date.strftime('%b %d, %Y at %I:%M %p')
+        dict['date'] = notification.date.strftime('%d/%m/%y %H:%M')
         if notification.last_open is None:
             dict['unread'] = 'True'
         else:
