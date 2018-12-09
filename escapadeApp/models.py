@@ -16,6 +16,7 @@ class User(db.Model):
     address = db.Column(db.TEXT())
     birthday = db.Column(db.DATE)
     role_id=db.Column(db.String(2))
+    profile = db.Column(db.String(120))
     write = db.relationship('Write', backref='write_User')
 
 class Write(db.Model):
@@ -101,3 +102,28 @@ class Photo(db.Model):
         self.public_id = public_id
         self.secure_url = secure_url
         self.url = url
+		
+class Activitylogs(db.Model):
+    __tablename__ = 'activitylogs'
+    act_id = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.VARCHAR)
+    user_id = db.Column(db.Integer)
+    date = db.Column(db.DATE, default=datetime.datetime.today())
+    role_id = db.Column(db.String(2))
+
+class Notifications(db.Model):
+    __tablename__ = 'notifications'
+    notification_id = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.VARCHAR)
+    write_id = db.Column(db.Integer)
+    user_id = db.Column(db.Integer)
+    last_open = db.Column(db.DateTime, nullable=True)
+    editor_id = db.Column(db.Integer, nullable=True)
+    date = db.Column(db.DATE, default=datetime.datetime.today())
+
+    def __init__(self, status='', write_id='', user_id='', last_open='', editor_id=''):
+        self.status = status
+        self.write_id = write_id
+        self.user_id = user_id
+        self.last_open = last_open
+        self.editor_id = editor_id

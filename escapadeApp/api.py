@@ -1,7 +1,8 @@
 from escapadeApp import *
 from models import *
 from flask_cors import cross_origin
-import binascii, base64
+import binascii, base64, jsonpickle
+from sqlalchemy import desc
 
 def token_required(f):
     @wraps(f)
@@ -34,7 +35,7 @@ def register_user():
     hashed_password = generate_password_hash(data['password'], method='sha256')
 
     new_user = User(public_id=str(uuid.uuid4()), username=data['username'], password_hash=hashed_password, firstname=data['firstname'], middlename=data['middlename'],
-                    lastname=data['lastname'], contact=data['contact'], address=data['address'], birthday=data['birthday'], role_id=2,
+                    lastname=data['lastname'], contact=data['contact'], address=data['address'], birthday=data['birthday'], role_id=3, profile='https://res.cloudinary.com/dbmtbrihl/image/upload/v1544125031/up.jpg',
                     age=data['age'])
     db.session.add(new_user)
     db.session.commit()
@@ -89,6 +90,11 @@ def writer_submit():
     db.session.add(region)
     db.session.commit()
     print('Good')
+    editors = User.query.filter_by(role_id=str(2)).all()
+    for editor in editors:
+        notification = Notifications(status='submission', write_id=get_write.write_id, user_id=user.id, last_open=None, editor_id=editor.id)
+        db.session.add(notification)
+        db.session.commit()
     return jsonify({'message': 'Added successfully!'})
 
 @app.route('/api/writer/submit/destination', methods=['POST'])
@@ -113,6 +119,12 @@ def writer_submit_destination():
         db.session.add(destination)
         db.session.commit()
         print('Good')
+        editors = User.query.filter_by(role_id=str(2)).all()
+        for editor in editors:
+            notification = Notifications(status='submission', write_id=get_write.write_id, user_id=user.id,
+                                         last_open=None, editor_id=editor.id)
+            db.session.add(notification)
+            db.session.commit()
         return jsonify({'message': 'Added successfully!'})
 
 @app.route('/api/writer/submit/attraction', methods=['POST'])
@@ -144,6 +156,12 @@ def writer_submit_attraction():
         db.session.add(attraction)
         db.session.commit()
         print('Good')
+        editors = User.query.filter_by(role_id=str(2)).all()
+        for editor in editors:
+            notification = Notifications(status='submission', write_id=get_write.write_id, user_id=user.id,
+                                         last_open=None, editor_id=editor.id)
+            db.session.add(notification)
+            db.session.commit()
         return jsonify({'message': 'Added successfully!'})
 
 @app.route('/api/writer/draft/destination', methods=['POST'])
@@ -317,247 +335,320 @@ def delete():
 @cross_origin('*')
 def submissions():
     data = request.get_json()
+    output2 = []
+    dict2 = {}
     user = User.query.filter_by(username=data['username']).first()
-    articles = Write.query.join(Region).filter(Write.write_id == Region.write_id).filter(
-        (Write.status == 'Submitted') & (Write.author_id == user.id)).all()
-    articles_destination = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).filter(
-        (Write.status == 'Submitted') & (Write.author_id == user.id)).all()
-    articles_attraction = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id).filter(
-        (Write.status == 'Submitted') & (Write.author_id == user.id)).all()
+    count = Write.query.filter((Write.status == 'Submitted') & (Write.author_id == user.id)).order_by(Write.write_id.desc()).count()
+    articles = Write.query.filter((Write.status == 'Submitted') & (Write.author_id == user.id)).order_by(Write.write_id.desc()).paginate(per_page=10,
+                                                                                                 page=int(
+                                                                                                     data['pagenum']),
+                                                                                                 error_out=True).items
+    articles2 = Write.query.filter((Write.status == 'Submitted') & (Write.author_id == user.id)).order_by(Write.write_id.desc()).paginate(per_page=10,
+                                                                                            page=int(data['pagenum']),
+                                                                                            error_out=True).iter_pages(
+        left_edge=1, right_edge=1, left_current=2, right_current=2)
+    frozen = jsonpickle.encode(articles2)
+    dict2['paginate'] = frozen
+    dict2['count'] = count
+    output2.append(dict2)
     output = []
     for article in articles:
+        dict = {}
         region = Region.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Region'
-        dict['name'] = region.name
-        dict['content'] = region.content
-        dict['photo'] = region.photo
-        dict['region_id'] = region.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        dict['status'] = article.status
-        output.append(dict)
-    for article in articles_destination:
         destination = Destination.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Destination'
-        dict['name'] = destination.name
-        dict['content'] = destination.content
-        dict['photo'] = destination.photo
-        dict['location'] = destination.location
-        dict['region_id'] = destination.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        dict['status'] = article.status
+        attraction = Attraction.query.filter_by(write_id=article.write_id).first()
+        if region is not None:
+            dict['type'] = 'Region'
+            dict['name'] = region.name
+            dict['content'] = region.content
+            dict['photo'] = region.photo
+            dict['region_id'] = region.region_id
+            dict['write_id'] = article.write_id
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
+        if destination is not None:
+            dict['type'] = 'Destination'
+            dict['name'] = destination.name
+            dict['content'] = destination.content
+            dict['photo'] = destination.photo
+            dict['region_id'] = destination.region_id
+            dict['write_id'] = article.write_id
+            dict['location'] = destination.location
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            region = Region.query.filter_by(region_id=destination.region_id).first()
+            dict['region_name'] = region.name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
+        if attraction is not None:
+            attraction = Attraction.query.filter_by(write_id=article.write_id).first()
+            dict = {}
+            dict['type'] = 'Attraction'
+            dict['name'] = attraction.name
+            dict['content'] = attraction.content
+            dict['photo'] = attraction.photo
+            dict['region_id'] = attraction.region_id
+            dict['write_id'] = attraction.write_id
+            destination2 = Destination.query.filter_by(destination_id=attraction.destination_id).first()
+            if destination2 is not None:
+                dict['destination_id'] = attraction.destination_id
+            region = Region.query.filter_by(region_id=attraction.region_id).first()
+            dict['region_name'] = region.name
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
         output.append(dict)
-    for article in articles_attraction:
-        destination = Attraction.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Attraction'
-        dict['name'] = destination.name
-        dict['content'] = destination.content
-        dict['photo'] = destination.photo
-        dict['location'] = destination.location
-        dict['region_id'] = destination.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        dict['status'] = article.status
-        output.append(dict)
-    return jsonify({'submissions': output})
+    return jsonify({'submissions': output, 'posts': output2})
 
 @app.route('/api/writer/submissions/returned', methods=['GET', 'POST'])
 @cross_origin('*')
 def returned_submissions():
     data = request.get_json()
+    output2 = []
+    dict2 = {}
     user = User.query.filter_by(username=data['username']).first()
-    articles = Write.query.join(Region).filter(Write.write_id == Region.write_id).filter(
-        (Write.status == 'Checked') & (Write.author_id == user.id)).all()
-    articles_destination = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).filter(
-        (Write.status == 'Checked') & (Write.author_id == user.id)).all()
-    articles_attraction = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id).filter(
-        (Write.status == 'Checked') & (Write.author_id == user.id)).all()
+    count = Write.query.filter((Write.status == 'Checked') & (Write.author_id == user.id)).order_by(
+        Write.write_id.desc()).count()
+    articles = Write.query.filter((Write.status == 'Checked') & (Write.author_id == user.id)).order_by(
+        Write.write_id.desc()).paginate(per_page=10,
+                                    page=int(
+                                        data['pagenum']),
+                                    error_out=True).items
+    articles2 = Write.query.filter((Write.status == 'Checked') & (Write.author_id == user.id)).order_by(
+        Write.write_id.desc()).paginate(per_page=10,
+                                    page=int(data['pagenum']),
+                                    error_out=True).iter_pages(
+        left_edge=1, right_edge=1, left_current=2, right_current=2)
+    frozen = jsonpickle.encode(articles2)
+    dict2['paginate'] = frozen
+    dict2['count'] = count
+    output2.append(dict2)
     output = []
     for article in articles:
+        dict = {}
         region = Region.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Region'
-        dict['name'] = region.name
-        dict['content'] = region.content
-        dict['photo'] = region.photo
-        dict['region_id'] = region.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        dict['status'] = article.status
-        if article.comment is not None:
-            dict['comment'] = article.comment
-        output.append(dict)
-    for article in articles_destination:
         destination = Destination.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Destination'
-        dict['name'] = destination.name
-        dict['content'] = destination.content
-        dict['photo'] = destination.photo
-        dict['location'] = destination.location
-        dict['region_id'] = destination.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        dict['status'] = article.status
-        if article.comment is not None:
-            dict['comment'] = article.comment
+        attraction = Attraction.query.filter_by(write_id=article.write_id).first()
+        if region is not None:
+            dict['type'] = 'Region'
+            dict['name'] = region.name
+            dict['content'] = region.content
+            dict['photo'] = region.photo
+            dict['region_id'] = region.region_id
+            dict['write_id'] = article.write_id
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
+        if destination is not None:
+            dict['type'] = 'Destination'
+            dict['name'] = destination.name
+            dict['content'] = destination.content
+            dict['photo'] = destination.photo
+            dict['region_id'] = destination.region_id
+            dict['write_id'] = article.write_id
+            dict['location'] = destination.location
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            region = Region.query.filter_by(region_id=destination.region_id).first()
+            dict['region_name'] = region.name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
+        if attraction is not None:
+            attraction = Attraction.query.filter_by(write_id=article.write_id).first()
+            dict = {}
+            dict['type'] = 'Attraction'
+            dict['name'] = attraction.name
+            dict['content'] = attraction.content
+            dict['photo'] = attraction.photo
+            dict['region_id'] = attraction.region_id
+            dict['write_id'] = attraction.write_id
+            destination2 = Destination.query.filter_by(destination_id=attraction.destination_id).first()
+            if destination2 is not None:
+                dict['destination_id'] = attraction.destination_id
+            region = Region.query.filter_by(region_id=attraction.region_id).first()
+            dict['region_name'] = region.name
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
         output.append(dict)
-    for article in articles_attraction:
-        destination = Attraction.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Attraction'
-        dict['name'] = destination.name
-        dict['content'] = destination.content
-        dict['photo'] = destination.photo
-        dict['location'] = destination.location
-        dict['region_id'] = destination.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        dict['status'] = article.status
-        if article.comment is not None:
-            dict['comment'] = article.comment
-        output.append(dict)
-    return jsonify({'submissions': output})
+    return jsonify({'submissions': output, 'posts': output2})
 
 @app.route('/api/writer/drafts', methods=['GET', 'POST'])
 @cross_origin('*')
 def drafts():
     data = request.get_json()
+    output2 = []
+    dict2 = {}
     user = User.query.filter_by(username=data['username']).first()
-    articles = Write.query.join(Region).filter(Write.write_id == Region.write_id).filter(
-        (Write.status == 'Drafted') & (Write.author_id == user.id)).all()
-    articles_destination = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).filter(
-        (Write.status == 'Drafted') & (Write.author_id == user.id)).all()
-    articles_attraction = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id).filter(
-        (Write.status == 'Drafted') & (Write.author_id == user.id)).all()
+    count = Write.query.filter((Write.status == 'Drafted') & (Write.author_id == user.id)).order_by(
+        Write.write_id.desc()).count()
+    articles = Write.query.filter((Write.status == 'Drafted') & (Write.author_id == user.id)).order_by(
+        Write.write_id.desc()).paginate(per_page=10,
+                                    page=int(
+                                        data['pagenum']),
+                                    error_out=True).items
+    articles2 = Write.query.filter((Write.status == 'Drafted') & (Write.author_id == user.id)).order_by(
+        Write.write_id.desc()).paginate(per_page=10,
+                                    page=int(data['pagenum']),
+                                    error_out=True).iter_pages(
+        left_edge=1, right_edge=1, left_current=2, right_current=2)
+    frozen = jsonpickle.encode(articles2)
+    dict2['paginate'] = frozen
+    dict2['count'] = count
+    output2.append(dict2)
     output = []
     for article in articles:
+        dict = {}
         region = Region.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Region'
-        dict['name'] = region.name
-        dict['content'] = region.content
-        dict['photo'] = region.photo
-        dict['region_id'] = region.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        get_user = User.query.filter_by(username=article.author_name).first()
-        dict['author_name'] = get_user.firstname + get_user.lastname
-        dict['status'] = article.status
-        output.append(dict)
-    for article in articles_destination:
         destination = Destination.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Destination'
-        dict['name'] = destination.name
-        dict['content'] = destination.content
-        dict['photo'] = destination.photo
-        dict['location'] = destination.location
-        dict['region_id'] = destination.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        get_user = User.query.filter_by(username=article.author_name).first()
-        dict['author_name'] = get_user.firstname + get_user.lastname
-        dict['status'] = article.status
+        attraction = Attraction.query.filter_by(write_id=article.write_id).first()
+        if region is not None:
+            dict['type'] = 'Region'
+            dict['name'] = region.name
+            dict['content'] = region.content
+            dict['photo'] = region.photo
+            dict['region_id'] = region.region_id
+            dict['write_id'] = article.write_id
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
+        if destination is not None:
+            dict['type'] = 'Destination'
+            dict['name'] = destination.name
+            dict['content'] = destination.content
+            dict['photo'] = destination.photo
+            dict['region_id'] = destination.region_id
+            dict['write_id'] = article.write_id
+            dict['location'] = destination.location
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            region = Region.query.filter_by(region_id=destination.region_id).first()
+            dict['region_name'] = region.name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
+        if attraction is not None:
+            attraction = Attraction.query.filter_by(write_id=article.write_id).first()
+            dict = {}
+            dict['type'] = 'Attraction'
+            dict['name'] = attraction.name
+            dict['content'] = attraction.content
+            dict['photo'] = attraction.photo
+            dict['region_id'] = attraction.region_id
+            dict['write_id'] = attraction.write_id
+            destination2 = Destination.query.filter_by(destination_id=attraction.destination_id).first()
+            if destination2 is not None:
+                dict['destination_id'] = attraction.destination_id
+            region = Region.query.filter_by(region_id=attraction.region_id).first()
+            dict['region_name'] = region.name
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
         output.append(dict)
-    for article in articles_attraction:
-        destination = Attraction.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Attraction'
-        dict['name'] = destination.name
-        dict['content'] = destination.content
-        dict['photo'] = destination.photo
-        dict['location'] = destination.location
-        dict['region_id'] = destination.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        get_user = User.query.filter_by(username=article.author_name).first()
-        dict['author_name'] = get_user.firstname + get_user.lastname
-        dict['status'] = article.status
-        output.append(dict)
-    return jsonify({'drafts': output})
+    return jsonify({'submissions': output, 'posts': output2})
 
 @app.route('/api/editor/submissions', methods=['GET', 'POST'])
 @cross_origin('*')
 def editor_submissions():
     data = request.get_json()
+    output2 = []
+    dict2 = {}
     user = User.query.filter_by(username=data['username']).first()
-    articles = Write.query.join(Region).filter(Write.write_id == Region.write_id).filter(Write.status == 'Submitted').all()
-    articles2 = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).filter(Write.status == 'Submitted').all()
-    articles3 = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id).filter(
-        Write.status == 'Submitted').all()
+    count = Write.query.filter(Write.status == 'Submitted').order_by(
+        Write.write_id.desc()).count()
+    articles = Write.query.filter(Write.status == 'Submitted').order_by(
+        Write.write_id.desc()).paginate(per_page=10,
+                                    page=int(
+                                        data['pagenum']),
+                                    error_out=True).items
+    articles2 = Write.query.filter(Write.status == 'Submitted').order_by(
+        Write.write_id.desc()).paginate(per_page=10,
+                                    page=int(data['pagenum']),
+                                    error_out=True).iter_pages(
+        left_edge=1, right_edge=1, left_current=2, right_current=2)
+    frozen = jsonpickle.encode(articles2)
+    dict2['paginate'] = frozen
+    dict2['count'] = count
+    output2.append(dict2)
     output = []
     for article in articles:
+        dict = {}
         region = Region.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Region'
-        dict['name'] = region.name
-        dict['content'] = region.content
-        dict['photo'] = region.photo
-        dict['region_id'] = region.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        user2 = User.query.filter_by(id=article.author_id).first()
-        dict['author_name'] = user2.firstname + ' ' + user2.lastname
-        dict['status'] = article.status
-        output.append(dict)
-    for article in articles2:
         destination = Destination.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Destination'
-        dict['name'] = destination.name
-        dict['content'] = destination.content
-        dict['photo'] = destination.photo
-        dict['region_id'] = destination.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        user2 = User.query.filter_by(id=article.author_id).first()
-        dict['author_name'] = user2.firstname + ' ' + user2.lastname
-        dict['status'] = article.status
-        output.append(dict)
-    for article in articles3:
         attraction = Attraction.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Attraction'
-        dict['name'] = attraction.name
-        dict['content'] = attraction.content
-        dict['photo'] = attraction.photo
-        dict['region_id'] = attraction.region_id
-        dict['write_id'] = attraction.write_id
-        destination = Destination.query.filter_by(destination_id=attraction.destination_id).first()
+        if region is not None:
+            dict['type'] = 'Region'
+            dict['name'] = region.name
+            dict['content'] = region.content
+            dict['photo'] = region.photo
+            dict['region_id'] = region.region_id
+            dict['write_id'] = article.write_id
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
         if destination is not None:
-            dict['destination_id'] = attraction.destination_id
-        dict['date'] = article.date
-        dict['author_id'] = article.author_id
-        user2 = User.query.filter_by(id=article.author_id).first()
-        dict['author_name'] = user2.firstname + ' ' + user2.lastname
-        dict['status'] = article.status
+            dict['type'] = 'Destination'
+            dict['name'] = destination.name
+            dict['content'] = destination.content
+            dict['photo'] = destination.photo
+            dict['region_id'] = destination.region_id
+            dict['write_id'] = article.write_id
+            dict['location'] = destination.location
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            region = Region.query.filter_by(region_id=destination.region_id).first()
+            dict['region_name'] = region.name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
+        if attraction is not None:
+            attraction = Attraction.query.filter_by(write_id=article.write_id).first()
+            dict = {}
+            dict['type'] = 'Attraction'
+            dict['name'] = attraction.name
+            dict['content'] = attraction.content
+            dict['photo'] = attraction.photo
+            dict['region_id'] = attraction.region_id
+            dict['write_id'] = attraction.write_id
+            destination2 = Destination.query.filter_by(destination_id=attraction.destination_id).first()
+            if destination2 is not None:
+                dict['destination_id'] = attraction.destination_id
+            region = Region.query.filter_by(region_id=attraction.region_id).first()
+            dict['region_name'] = region.name
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
         output.append(dict)
-
-    return jsonify({'submissions': output})
+    return jsonify({'submissions': output, 'posts': output2})
 
 @app.route('/api/writer/submission/edit', methods=['GET', 'POST'])
 @cross_origin('*')
@@ -579,7 +670,6 @@ def edit_submissions():
     dict['write_id'] = article.write_id
     dict['date'] = article.date
     dict['author_id'] = article.author_id
-    dict['author_name'] = article.author_name
     user2 = User.query.filter_by(id=article.author_id).first()
     dict['author_name'] = user2.firstname + ' ' + user2.lastname
     dict['status'] = article.status
@@ -662,6 +752,11 @@ def submit_draft():
     get_write.status='Submitted'
     get_write.date=datetime.datetime.today()
     db.session.commit()
+    editors = User.query.filter_by(role_id=str(2)).all()
+    for editor in editors:
+        notification = Notifications(status='submission', write_id=get_write.write_id, user_id=user.id, last_open=None, editor_id=editor.id)
+        db.session.add(notification)
+        db.session.commit()
     print('Good')
     return jsonify({'message': 'Added successfully!'})
 
@@ -681,6 +776,11 @@ def submit_region2():
     get_write.status='Submitted'
     get_write.date=datetime.datetime.today()
     db.session.commit()
+    editors = User.query.filter_by(role_id=str(2)).all()
+    for editor in editors:
+        notification = Notifications(status='submission', write_id=get_write.write_id, user_id=user.id, last_open=None, editor_id=editor.id)
+        db.session.add(notification)
+        db.session.commit()
     print('Good')
     return jsonify({'message': 'Added successfully!'})
 
@@ -703,6 +803,11 @@ def submit_draft_destination():
     get_write.status='Submitted'
     get_write.date=datetime.datetime.today()
     db.session.commit()
+    editors = User.query.filter_by(role_id=str(2)).all()
+    for editor in editors:
+        notification = Notifications(status='submission', write_id=get_write.write_id, user_id=user.id, last_open=None, editor_id=editor.id)
+        db.session.add(notification)
+        db.session.commit()
     print('Good')
     return jsonify({'message': 'Added successfully!'})
 
@@ -725,6 +830,11 @@ def submit_draft_destination2():
     get_write.status='Submitted'
     get_write.date=datetime.datetime.today()
     db.session.commit()
+    editors = User.query.filter_by(role_id=2).all()
+    for editor in editors:
+        notification = Notifications(status='submission', write_id=get_write.write_id, user_id=user.id, last_open=None, editor_id=editor.id)
+        db.session.add(notification)
+        db.session.commit()
     print('Good')
     return jsonify({'message': 'Added successfully!'})
 
@@ -752,6 +862,11 @@ def submit_draft_attraction():
     get_write.status='Submitted'
     get_write.date=datetime.datetime.today()
     db.session.commit()
+    editors = User.query.filter_by(role_id=str(2)).all()
+    for editor in editors:
+        notification = Notifications(status='submission', write_id=get_write.write_id, user_id=user.id, last_open=None, editor_id=editor.id)
+        db.session.add(notification)
+        db.session.commit()
     print('Good')
     return jsonify({'message': 'Added successfully!'})
 
@@ -779,6 +894,11 @@ def submit_return2():
     get_write.status = 'Submitted'
     get_write.date = datetime.datetime.today()
     db.session.commit()
+    editors = User.query.filter_by(role_id=str(2)).all()
+    for editor in editors:
+        notification = Notifications(status='submission', write_id=get_write.write_id, user_id=user.id, last_open=None, editor_id=editor.id)
+        db.session.add(notification)
+        db.session.commit()
     print('Good')
     return jsonify({'message': 'Added successfully!'})
 
@@ -861,6 +981,15 @@ def editor_submit_reg():
     write.status = 'Posted'
     db.session.commit()
     print('Good')
+    notifications = Notifications.query.filter_by(write_id=write.write_id).all()
+    notification_new = Notifications(status='returned', write_id=write.write_id, user_id=write.author_id, last_open=None,
+                                     editor_id=None)
+    db.session.add(notification_new)
+    db.session.commit()
+    for notification in notifications:
+        db.session.delete(notification)
+        db.session.commit()
+
     return jsonify({'message': 'Added successfully!'})
 
 @app.route('/api/editor/publish/destination', methods=['POST'])
@@ -880,6 +1009,14 @@ def editor_submit_des():
     write.status = 'Posted'
     db.session.commit()
     print('Good')
+    notification_new = Notifications(status='returned', write_id=write.write_id, user_id=write.author_id, last_open=None,
+                                     editor_id=None)
+    db.session.add(notification_new)
+    db.session.commit()
+    notifications = Notifications.query.filter_by(write_id=write.write_id).all()
+    for notification in notifications:
+        db.session.delete(notification)
+        db.session.commit()
     return jsonify({'message': 'Added successfully!'})
 
 @app.route('/api/editor/publish/attraction', methods=['POST'])
@@ -904,6 +1041,14 @@ def editor_submit_att():
     write.status = 'Posted'
     db.session.commit()
     print('Good')
+    notification_new = Notifications(status='returned', write_id=write.write_id, user_id=write.author_id, last_open=None,
+                                     editor_id=None)
+    db.session.add(notification_new)
+    db.session.commit()
+    notifications = Notifications.query.filter_by(write_id=write.write_id).all()
+    for notification in notifications:
+        db.session.delete(notification)
+        db.session.commit()
     return jsonify({'message': 'Added successfully!'})
 
 @app.route('/api/editor/delete/region', methods=['POST'])
@@ -966,6 +1111,13 @@ def editor_edit_reg():
     write.comment = data['comment']
     db.session.commit()
     print('Good')
+    notifications = Notifications.query.filter_by(write_id=write.write_id).all()
+    notification_new = Notifications(status='checked', write_id=write.write_id, user_id=write.author_id,last_open=None,editor_id=None)
+    db.session.add(notification_new)
+    db.session.commit()
+    for notification in notifications:
+        db.session.delete(notification)
+        db.session.commit()
     return jsonify({'message': 'Added successfully!'})
 
 @app.route('/api/editor/edit/destination', methods=['POST'])
@@ -986,6 +1138,14 @@ def editor_edit_destination():
     write.comment = data['comment']
     db.session.commit()
     print('Good')
+    notifications = Notifications.query.filter_by(write_id=write.write_id).all()
+    notification_new = Notifications(status='checked', write_id=write.write_id, user_id=write.author_id, last_open=None,
+                                     editor_id=None)
+    db.session.add(notification_new)
+    db.session.commit()
+    for notification in notifications:
+        db.session.delete(notification)
+        db.session.commit()
     return jsonify({'message': 'Added successfully!'})
 
 @app.route('/api/editor/edit/attraction', methods=['POST'])
@@ -1011,6 +1171,14 @@ def editor_edit_attraction():
     write.comment = data['comment']
     db.session.commit()
     print('Good')
+    notifications = Notifications.query.filter_by(write_id=write.write_id).all()
+    notification_new = Notifications(status='checked', write_id=write.write_id, user_id=write.author_id, last_open=None,
+                                     editor_id=None)
+    db.session.add(notification_new)
+    db.session.commit()
+    for notification in notifications:
+        db.session.delete(notification)
+        db.session.commit()
     return jsonify({'message': 'Added successfully!'})
 
 @app.route('/get_regions')
@@ -1052,77 +1220,102 @@ def get_destinations():
 @app.route('/get_posted')
 @cross_origin('*')
 def get_posted():
-    articles = Write.query.join(Region).filter(Write.write_id == Region.write_id).filter(Write.status == 'Posted').all()
-    articles2 = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).filter(Write.status == 'Posted').all()
-    articles3 = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id).filter(
-        Write.status == 'Posted').all()
+    data = request.get_json()
+    print data
+    output2 = []
+    dict2 = {}
+    count = Write.query.filter_by(status='Posted').order_by(desc(Write.write_id)).count()
+    articles = Write.query.filter(Write.status == 'Posted').order_by(desc(Write.write_id)).paginate(per_page=10,
+                                                                                            page=int(data['pagenum']),
+                                                                                            error_out=True).items
+    articles2 = Write.query.filter_by(status='Posted').order_by(desc(Write.write_id)).paginate(per_page=10, page=int(data['pagenum']), error_out=True).iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2)
+    frozen = jsonpickle.encode(articles2)
+    dict2['paginate'] = frozen
+    dict2['count'] = count
+    output2.append(dict2)
     output = []
     for article in articles:
+        dict = {}
         region = Region.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Region'
-        dict['name'] = region.name
-        dict['content'] = region.content
-        dict['photo'] = region.photo
-        dict['region_id'] = region.region_id
-        dict['write_id'] = article.write_id
-        dict['date'] = article.date.strftime('%B %d, %Y')
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        user = User.query.filter_by(username=article.author_name).first()
-        dict['author'] = user.firstname + ' ' + user.lastname
-        dict['status'] = article.status
-        output.append(dict)
-    for article in articles2:
         destination = Destination.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Destination'
-        dict['name'] = destination.name
-        dict['content'] = destination.content
-        dict['photo'] = destination.photo
-        dict['region_id'] = destination.region_id
-        dict['write_id'] = article.write_id
-        dict['location'] = destination.location
-        dict['date'] = article.date.strftime('%B %d, %Y')
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        region = Region.query.filter_by(region_id=destination.region_id).first()
-        dict['region_name'] = region.name
-        user = User.query.filter_by(username=article.author_name).first()
-        dict['author'] = user.firstname + ' ' + user.lastname
-        dict['status'] = article.status
-        output.append(dict)
-    for article in articles3:
         attraction = Attraction.query.filter_by(write_id=article.write_id).first()
-        dict = {}
-        dict['type'] = 'Attraction'
-        dict['name'] = attraction.name
-        dict['content'] = attraction.content
-        dict['photo'] = attraction.photo
-        dict['region_id'] = attraction.region_id
-        dict['write_id'] = attraction.write_id
-        destination = Destination.query.filter_by(destination_id=attraction.destination_id).first()
+        if region is not None:
+            dict['type'] = 'Region'
+            dict['name'] = region.name
+            dict['content'] = region.content
+            dict['photo'] = region.photo
+            dict['region_id'] = region.region_id
+            dict['write_id'] = article.write_id
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
         if destination is not None:
-            dict['destination_id'] = attraction.destination_id
-        region = Region.query.filter_by(region_id=attraction.region_id).first()
-        dict['region_name'] = region.name
-        dict['date'] = article.date.strftime('%B %d, %Y')
-        dict['author_id'] = article.author_id
-        dict['author_name'] = article.author_name
-        user = User.query.filter_by(username=article.author_name).first()
-        dict['author'] = user.firstname + ' ' + user.lastname
-        dict['status'] = article.status
+            dict['type'] = 'Destination'
+            dict['name'] = destination.name
+            dict['content'] = destination.content
+            dict['photo'] = destination.photo
+            dict['region_id'] = destination.region_id
+            dict['write_id'] = article.write_id
+            dict['location'] = destination.location
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            region = Region.query.filter_by(region_id=destination.region_id).first()
+            dict['region_name'] = region.name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
+        if attraction is not None:
+            attraction = Attraction.query.filter_by(write_id=article.write_id).first()
+            dict = {}
+            dict['type'] = 'Attraction'
+            dict['name'] = attraction.name
+            dict['content'] = attraction.content
+            dict['photo'] = attraction.photo
+            dict['region_id'] = attraction.region_id
+            dict['write_id'] = attraction.write_id
+            destination2 = Destination.query.filter_by(destination_id=attraction.destination_id).first()
+            if destination2 is not None:
+                dict['destination_id'] = attraction.destination_id
+            region = Region.query.filter_by(region_id=attraction.region_id).first()
+            dict['region_name'] = region.name
+            dict['date'] = article.date.strftime('%B %d, %Y')
+            dict['author_id'] = article.author_id
+            dict['author_name'] = article.author_name
+            user = User.query.filter_by(username=article.author_name).first()
+            dict['author_name'] = user.firstname + ' ' + user.lastname
+            dict['status'] = article.status
         output.append(dict)
 
-    return jsonify({'submissions': output})
+    return jsonify({'submissions': output, 'posts': output2})
 
 @app.route('/get/all/attractions')
 @cross_origin('*')
 def get_all_attractions():
-    articles3 = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id).filter(
-        Write.status == 'Posted').all()
+    data = request.get_json()
+    output2 = []
+    dict2 = {}
+    count = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id).filter(
+        Write.status == 'Posted').order_by(Write.write_id.desc()).count()
+    articles = Write.query.join(Attraction).filter(Write.write_id == Attraction.write_id).order_by(Write.write_id.desc()).filter(
+        Write.status == 'Posted').paginate(per_page=10,
+                                           page=int(data['pagenum']),
+                                           error_out=True).items
+    articles2 = Write.query.join(Attraction).filter(Write.status == 'Posted').filter(
+        Write.write_id == Attraction.write_id).order_by(Write.write_id.desc()).paginate(per_page=10,
+                                                                                page=int(data['pagenum']),
+                                                                                error_out=True).iter_pages(
+        left_edge=1, right_edge=1, left_current=2, right_current=2)
+    frozen = jsonpickle.encode(articles2)
+    dict2['paginate'] = frozen
+    dict2['count'] = count
+    output2.append(dict2)
     output = []
-    for article in articles3:
+    print(articles)
+    for article in articles:
         attraction = Attraction.query.filter_by(write_id=article.write_id).first()
         dict = {}
         dict['type'] = 'Attraction'
@@ -1140,18 +1333,34 @@ def get_all_attractions():
         dict['author_id'] = article.author_id
         dict['author_name'] = article.author_name
         user = User.query.filter_by(username=article.author_name).first()
-        dict['author'] = user.firstname + ' ' + user.lastname
+        dict['author_name'] = user.firstname + ' ' + user.lastname
         dict['status'] = article.status
         output.append(dict)
-    return jsonify({'posts': output})
+    return jsonify({'submissions': output, 'posts': output2})
 
 @app.route('/get/all/destinations')
 @cross_origin('*')
 def get_all_destinations():
-    articles2 = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).filter(
-        Write.status == 'Posted').all()
+    data = request.get_json()
+    output2 = []
+    dict2 = {}
+    count = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).filter(
+        Write.status == 'Posted').order_by(Write.write_id.desc()).count()
+    articles = Write.query.join(Destination).filter(Write.write_id == Destination.write_id).order_by(Write.write_id.desc()).filter(
+        Write.status == 'Posted').paginate(per_page=10,
+                                           page=int(data['pagenum']),
+                                           error_out=True).items
+    articles2 = Write.query.join(Destination).filter(Write.status == 'Posted').filter(
+        Write.write_id == Destination.write_id).order_by(Write.write_id.desc()).paginate(per_page=10,
+                                                                                page=int(data['pagenum']),
+                                                                                error_out=True).iter_pages(
+        left_edge=1, right_edge=1, left_current=2, right_current=2)
+    frozen = jsonpickle.encode(articles2)
+    dict2['paginate'] = frozen
+    dict2['count'] = count
+    output2.append(dict2)
     output = []
-    for article in articles2:
+    for article in articles:
         destination = Destination.query.filter_by(write_id=article.write_id).first()
         dict = {}
         dict['type'] = 'Destination'
@@ -1167,18 +1376,34 @@ def get_all_destinations():
         dict['region_name'] = region.name
         dict['location'] = destination.location
         user = User.query.filter_by(username=article.author_name).first()
-        dict['author'] = user.firstname + ' ' + user.lastname
+        dict['author_name'] = user.firstname + ' ' + user.lastname
         dict['status'] = article.status
         output.append(dict)
-    return jsonify({'posts': output})
+    return jsonify({'submissions': output, 'posts': output2})
 
 @app.route('/get/all/region')
 @cross_origin('*')
 def get_all_region():
-    articles = Write.query.join(Region).filter(Write.write_id == Region.write_id).filter(Write.status == 'Posted').all()
+    data = request.get_json()
+    output2 = []
+    dict2 = {}
+    count = Write.query.join(Region).filter(Write.write_id == Region.write_id).filter(Write.status == 'Posted').order_by(Write.write_id.desc()).count()
+    articles = Write.query.join(Region).filter(Write.write_id == Region.write_id).order_by(Write.write_id.desc()).filter(Write.status == 'Posted').paginate(per_page=10,
+                                                                                            page=int(data['pagenum']),
+                                                                                            error_out=True).items
+    articles2 = Write.query.join(Region).filter(Write.status == 'Posted').filter(Write.write_id == Region.write_id).order_by(Write.write_id.desc()).paginate(per_page=10,
+                                                                                            page=int(data['pagenum']),
+                                                                                            error_out=True).iter_pages(
+        left_edge=1, right_edge=1, left_current=2, right_current=2)
+    frozen = jsonpickle.encode(articles2)
+    dict2['paginate'] = frozen
+    dict2['count'] = count
+    output2.append(dict2)
     output = []
+    print(articles)
     for article in articles:
         region = Region.query.filter_by(write_id=article.write_id).first()
+        print region.name
         dict = {}
         dict['type'] = 'Region'
         dict['name'] = region.name
@@ -1190,14 +1415,14 @@ def get_all_region():
         dict['author_id'] = article.author_id
         dict['author_name'] = article.author_name
         user = User.query.filter_by(username=article.author_name).first()
-        dict['author'] = user.firstname + ' ' + user.lastname
+        dict['author_name'] = user.firstname + ' ' + user.lastname
         dict['status'] = article.status
         output.append(dict)
-    return jsonify({'posts': output})
+    return jsonify({'submissions': output, 'posts': output2})
 
 @app.route('/get/region')
 @cross_origin('*')
-def get_region():
+def get_region123123():
     data = request.get_json()
     output = []
     dict = {}
@@ -1213,7 +1438,7 @@ def get_region():
     dict['author_id'] = article.author_id
     dict['author_name'] = article.author_name
     user = User.query.filter_by(username=article.author_name).first()
-    dict['author'] = user.firstname + ' ' + user.lastname
+    dict['author_name'] = user.firstname + ' ' + user.lastname
     dict['status'] = article.status
     output.append(dict)
     return jsonify({'post': output})
@@ -1244,7 +1469,7 @@ def get_destination():
     dict['author_id'] = article.author_id
     dict['author_name'] = article.author_name
     user = User.query.filter_by(username=article.author_name).first()
-    dict['author'] = user.firstname + ' ' + user.lastname
+    dict['author_name'] = user.firstname + ' ' + user.lastname
     dict['status'] = article.status
     output.append(dict)
     return jsonify({'post': output})
@@ -1269,7 +1494,7 @@ def get_attraction():
     dict['author_id'] = article.author_id
     dict['author_name'] = article.author_name
     user = User.query.filter_by(username=article.author_name).first()
-    dict['author'] = user.firstname + ' ' + user.lastname
+    dict['author_name'] = user.firstname + ' ' + user.lastname
     dict['status'] = article.status
     output.append(dict)
     return jsonify({'post': output})
@@ -1325,6 +1550,7 @@ def profile():
     dict['age'] = user.age
     dict['contact'] = user.contact
     dict['birthday'] = user.birthday
+    dict['profile'] = user.profile
     output.append(dict)
 
     print('Good')
@@ -1396,4 +1622,130 @@ def your_post():
         output.append(dict)
 
     return jsonify({'submissions': output})
+	
+@app.route('/api/profile/edit',  methods=['POST'])
+@cross_origin('*')
+def profile_edit():
+    print 'Proof'
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    user.profile = data['profile']
+    db.session.commit()
 
+    return jsonify({'message': 'success!'})
+
+@app.route('/api/notifications/editor', methods=['GET', 'POST'])
+@cross_origin('*')
+def get_notifications():
+    data = request.get_json()
+    output = []
+    user = User.query.filter_by(username=data['username']).first()
+    notifications = Notifications.query.filter((Notifications.editor_id == user.id) & (Notifications.status == 'submission')).all()
+    notifications_unread = Notifications.query.filter((Notifications.status == 'submission') &
+        ((Notifications.editor_id == user.id) & (Notifications.last_open == None))).count()
+    output2 = []
+    dict2 = {}
+    dict2['count'] = notifications_unread
+    output2.append(dict2)
+    for notification in notifications:
+        dict = {}
+        dict['status'] = notification.status
+        user = User.query.filter_by(id=notification.user_id).first()
+        dict['username'] = user.username
+        dict['fullname'] = user.firstname + ' ' + user.lastname
+        dict['profile'] = user.profile
+        dict['write_id'] = notification.write_id
+        dict['date'] = notification.date.strftime('%b %d, %Y at %I:%M %p')
+        if notification.last_open is None:
+            dict['unread'] = 'True'
+        else:
+            dict['unread'] = 'False'
+        write = Write.query.filter_by(write_id=notification.write_id).first()
+        region_check = Region.query.filter_by(write_id=write.write_id).first()
+        destination_check = Destination.query.filter_by(write_id=write.write_id).first()
+        attraction_check = Attraction.query.filter_by(write_id=write.write_id).first()
+        if region_check is not None:
+            dict['type'] = 'region'
+            dict['name'] = region_check.name
+        elif destination_check is not None:
+            dict['type'] = 'destination'
+            dict['name'] = destination_check.name
+        elif attraction_check is not None:
+            dict['type'] = 'attraction'
+            dict['name'] = attraction_check.name
+        output.append(dict)
+    print(output)
+
+
+    return jsonify({'notifications': output, 'count':output2})
+
+@app.route('/api/notifications/writer', methods=['GET', 'POST'])
+@cross_origin('*')
+def get_notifications_writer():
+    data = request.get_json()
+    output = []
+    user = User.query.filter_by(username=data['username']).first()
+    notifications = Notifications.query.filter((Notifications.user_id == user.id) & ((Notifications.status == 'returned') | (Notifications.status == 'checked'))).all()
+    notifications_unread = Notifications.query.filter(((Notifications.status == 'returned') | (Notifications.status == 'checked')) &
+        ((Notifications.user_id == user.id) & (Notifications.last_open == None))).count()
+    output2 = []
+    dict2 = {}
+    dict2['count'] = notifications_unread
+    output2.append(dict2)
+    for notification in notifications:
+        dict = {}
+        dict['status'] = notification.status
+        user = User.query.filter_by(id=notification.user_id).first()
+        dict['username'] = user.username
+        dict['fullname'] = user.firstname + ' ' + user.lastname
+        dict['profile'] = user.profile
+        dict['write_id'] = notification.write_id
+        dict['date'] = notification.date.strftime('%b %d, %Y at %I:%M %p')
+        if notification.last_open is None:
+            dict['unread'] = 'True'
+        else:
+            dict['unread'] = 'False'
+        write = Write.query.filter_by(write_id=notification.write_id).first()
+        region_check = Region.query.filter_by(write_id=write.write_id).first()
+        destination_check = Destination.query.filter_by(write_id=write.write_id).first()
+        attraction_check = Attraction.query.filter_by(write_id=write.write_id).first()
+        if region_check is not None:
+            dict['type'] = 'region'
+            dict['name'] = region_check.name
+        elif destination_check is not None:
+            dict['type'] = 'destination'
+            dict['name'] = destination_check.name
+        elif attraction_check is not None:
+            dict['type'] = 'attraction'
+            dict['name'] = attraction_check.name
+        output.append(dict)
+    return jsonify({'notifications': output, 'count':output2})
+
+
+@app.route('/mark-read/editor', methods=['GET', 'POST'])
+@cross_origin('*')
+def mark_read_editor():
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    notifications= Notifications.query.filter((Notifications.status == 'submission') &
+                                                      ((Notifications.editor_id == user.id) & (
+                                                                  Notifications.last_open == None))).all()
+    for notification in notifications:
+        notification.last_open = datetime.datetime.now()
+        db.session.commit()
+    return 'success'
+
+@app.route('/mark-read/writer', methods=['GET', 'POST'])
+@cross_origin('*')
+def mark_read_writer():
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    notifications = Notifications.query.filter(((Notifications.status == 'returned') | (Notifications.status == 'checked')) &
+                                                      ((Notifications.user_id == user.id) & (
+                                                                  Notifications.last_open == None))).all()
+    print notifications
+    for notification in notifications:
+        print notification.user_id
+        notification.last_open = datetime.datetime.now()
+        db.session.commit()
+    return 'success'
