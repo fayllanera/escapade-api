@@ -16,12 +16,13 @@ class User(db.Model):
     address = db.Column(db.TEXT())
     birthday = db.Column(db.DATE)
     role_id=db.Column(db.String(2))
+    profile = db.Column(db.String(120))
     write = db.relationship('Write', backref='write_User')
 
 class Write(db.Model):
     __tablename__ = 'write'
     write_id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.DATE, default=datetime.datetime.today())
+    date = db.Column(db.DATE, default=datetime.datetime.now())
     author_id = db.Column(db.Integer,db.ForeignKey('user.id'))
     author_name = db.Column(db.VARCHAR)
     status = db.Column(db.VARCHAR)
@@ -40,15 +41,15 @@ class Region(db.Model):
     region_id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.VARCHAR)
     content = db.Column(db.VARCHAR)
-    photos = db.Column(db.LargeBinary)
+    photo = db.Column(db.String)
     write_id = db.Column(db.Integer, db.ForeignKey('write.write_id'))
     destination = db.relationship('Destination', backref='destination_Region')
     attraction = db.relationship('Attraction', backref='attraction_Region')
 
-    def __init__(self, name='', content='', photos='', write_id=''):
+    def __init__(self, name='', content='', photo='', write_id=''):
         self.name = name
         self.content = content
-        self.photos = photos
+        self.photo = photo
         self.write_id = write_id
 
 class Destination(db.Model):
@@ -57,7 +58,7 @@ class Destination(db.Model):
     name = db.Column(db.VARCHAR)
     content = db.Column(db.VARCHAR)
     location = db.Column(db.VARCHAR)
-    photo = db.Column(db.LargeBinary)
+    photo = db.Column(db.String)
     write_id = db.Column(db.Integer, db.ForeignKey('write.write_id'))
     region_id = db.Column(db.Integer, db.ForeignKey('region.region_id'))
     attraction = db.relationship('Attraction', backref='attraction_Destination')
@@ -76,7 +77,7 @@ class Attraction(db.Model):
     name = db.Column(db.VARCHAR)
     content = db.Column(db.VARCHAR)
     location = db.Column(db.VARCHAR)
-    photo = db.Column(db.LargeBinary)
+    photo = db.Column(db.String)
     region_id = db.Column(db.Integer, db.ForeignKey('region.region_id'))
     destination_id = db.Column(db.Integer, db.ForeignKey('destination.destination_id'), nullable=True)
     write_id = db.Column(db.Integer, db.ForeignKey('write.write_id'))
@@ -93,9 +94,37 @@ class Attraction(db.Model):
 class Photo(db.Model):
     __tablename__ = 'Photo'
     photo_id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.VARCHAR)
-    photo = db.Column(db.LargeBinary)
+    public_id = db.Column(db.VARCHAR)
+    secure_url = db.Column(db.String)
+    url = db.Column(db.String)
 
-    def __init__(self, username='', photo=''):
-        self.username = username
-        self.photo = photo
+    def __init__(self, public_id='', secure_url='', url=''):
+        self.public_id = public_id
+        self.secure_url = secure_url
+        self.url = url
+		
+class Activitylogs(db.Model):
+    __tablename__ = 'activitylogs'
+    act_id = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.VARCHAR)
+    user_id = db.Column(db.Integer)
+    client_id = db.Column(db.VARCHAR)
+    role_id = db.Column(db.String(2))
+    date = db.Column(db.DateTime, default=datetime.datetime.now())
+
+class Notifications(db.Model):
+    __tablename__ = 'notifications'
+    notification_id = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.VARCHAR)
+    write_id = db.Column(db.Integer)
+    user_id = db.Column(db.Integer)
+    last_open = db.Column(db.DateTime, nullable=True)
+    editor_id = db.Column(db.Integer, nullable=True)
+    date = db.Column(db.DATE, default=datetime.datetime.now())
+
+    def __init__(self, status='', write_id='', user_id='', last_open='', editor_id=''):
+        self.status = status
+        self.write_id = write_id
+        self.user_id = user_id
+        self.last_open = last_open
+        self.editor_id = editor_id
