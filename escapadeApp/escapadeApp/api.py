@@ -997,13 +997,14 @@ def editor_submit_reg():
     db.session.commit()
     print('Good')
     notifications = Notifications.query.filter_by(write_id=write.write_id).all()
-    notification_new = Notifications(status='returned', write_id=write.write_id, user_id=write.author_id, last_open=None,
-                                     editor_id=None)
-    db.session.add(notification_new)
+
     db.session.commit()
     for notification in notifications:
         db.session.delete(notification)
         db.session.commit()
+    notification_new = Notifications(status='returned', write_id=write.write_id, user_id=write.author_id, last_open=None,
+                                     editor_id=None)
+    db.session.add(notification_new)
 
     act_logsInput(data['username'],3,write.author_name)  #note author_name sa write kay username
 
@@ -1026,14 +1027,16 @@ def editor_submit_des():
     write.status = 'Posted'
     db.session.commit()
     print('Good')
-    notification_new = Notifications(status='returned', write_id=write.write_id, user_id=write.author_id, last_open=None,
-                                     editor_id=None)
-    db.session.add(notification_new)
-    db.session.commit()
+
     notifications = Notifications.query.filter_by(write_id=write.write_id).all()
     for notification in notifications:
         db.session.delete(notification)
         db.session.commit()
+
+    notification_new = Notifications(status='returned', write_id=write.write_id, user_id=write.author_id, last_open=None,
+                                     editor_id=None)
+    db.session.add(notification_new)
+    db.session.commit()
 
     act_logsInput(data['user_username'],2,'own')
 
@@ -1061,14 +1064,16 @@ def editor_submit_att():
     write.status = 'Posted'
     db.session.commit()
     print('Good')
-    notification_new = Notifications(status='returned', write_id=write.write_id, user_id=write.author_id, last_open=None,
-                                     editor_id=None)
-    db.session.add(notification_new)
-    db.session.commit()
+
     notifications = Notifications.query.filter_by(write_id=write.write_id).all()
     for notification in notifications:
         db.session.delete(notification)
         db.session.commit()
+
+    notification_new = Notifications(status='returned', write_id=write.write_id, user_id=write.author_id, last_open=None,
+                                     editor_id=None)
+    db.session.add(notification_new)
+    db.session.commit()
 
     act_logsInput(data['user_username'],2,'own')
 
@@ -1144,12 +1149,13 @@ def editor_edit_reg():
     db.session.commit()
     print('Good')
     notifications = Notifications.query.filter_by(write_id=write.write_id).all()
-    notification_new = Notifications(status='checked', write_id=write.write_id, user_id=write.author_id,last_open=None,editor_id=None)
-    db.session.add(notification_new)
-    db.session.commit()
+
     for notification in notifications:
         db.session.delete(notification)
         db.session.commit()
+    notification_new = Notifications(status='checked', write_id=write.write_id, user_id=write.author_id,last_open=None,editor_id=None)
+    db.session.add(notification_new)
+    db.session.commit()
 
     act_logsInput(data['username'],4,write.author_name)
 
@@ -1174,13 +1180,14 @@ def editor_edit_destination():
     db.session.commit()
     print('Good')
     notifications = Notifications.query.filter_by(write_id=write.write_id).all()
+
+    for notification in notifications:
+        db.session.delete(notification)
+        db.session.commit()
     notification_new = Notifications(status='checked', write_id=write.write_id, user_id=write.author_id, last_open=None,
                                      editor_id=None)
     db.session.add(notification_new)
     db.session.commit()
-    for notification in notifications:
-        db.session.delete(notification)
-        db.session.commit()
     return jsonify({'message': 'Added successfully!'})
 
 @app.route('/api/editor/edit/attraction', methods=['POST'])
@@ -1207,13 +1214,14 @@ def editor_edit_attraction():
     db.session.commit()
     print('Good')
     notifications = Notifications.query.filter_by(write_id=write.write_id).all()
+
+    for notification in notifications:
+        db.session.delete(notification)
+        db.session.commit()
     notification_new = Notifications(status='checked', write_id=write.write_id, user_id=write.author_id, last_open=None,
                                      editor_id=None)
     db.session.add(notification_new)
     db.session.commit()
-    for notification in notifications:
-        db.session.delete(notification)
-        db.session.commit()
     return jsonify({'message': 'Added successfully!'})
 
 @app.route('/get_regions')
@@ -1259,7 +1267,7 @@ def get_posted():
     print data
     output2 = []
     dict2 = {}
-    count = Write.query.filter_by(status='Posted').order_by(desc(Write.write_id)).count()
+    count = Write.query.filter_by(status='Posted').count()
     articles = Write.query.filter(Write.status == 'Posted').order_by(desc(Write.write_id)).paginate(per_page=10,
                                                                                             page=int(data['pagenum']),
                                                                                             error_out=True).items
@@ -1287,7 +1295,7 @@ def get_posted():
             user = User.query.filter_by(username=article.author_name).first()
             dict['author_name'] = user.firstname + ' ' + user.lastname
             dict['status'] = article.status
-        if destination is not None:
+        elif destination is not None:
             dict['type'] = 'Destination'
             dict['name'] = destination.name
             dict['content'] = destination.content
@@ -1303,7 +1311,7 @@ def get_posted():
             user = User.query.filter_by(username=article.author_name).first()
             dict['author_name'] = user.firstname + ' ' + user.lastname
             dict['status'] = article.status
-        if attraction is not None:
+        elif attraction is not None:
             attraction = Attraction.query.filter_by(write_id=article.write_id).first()
             dict = {}
             dict['type'] = 'Attraction'
@@ -1323,8 +1331,10 @@ def get_posted():
             user = User.query.filter_by(username=article.author_name).first()
             dict['author_name'] = user.firstname + ' ' + user.lastname
             dict['status'] = article.status
+        else:
+            continue
         output.append(dict)
-
+    print output
     return jsonify({'submissions': output, 'posts': output2})
 
 @app.route('/get/all/attractions')
@@ -1534,6 +1544,66 @@ def get_attraction():
     output.append(dict)
     return jsonify({'post': output})
 
+@app.route('/get/attraction/byregion')
+@cross_origin('*')
+def get_attraction_byregion():
+    data = request.get_json()
+    output = []
+
+    region = Region.query.filter_by(name = data['title']).first()
+
+    attractions = Attraction.query.join(Write).filter((Attraction.region_id == region.region_id) & (Write.status == 'Posted')).all()
+    for attraction in attractions:
+        dict = {}
+        article = Write.query.filter_by(write_id=attraction.write_id).first()
+        dict['type'] = 'Attraction'
+        dict['name'] = attraction.name
+        dict['content'] = attraction.content
+        dict['photo'] = attraction.photo
+        dict['region_id'] = attraction.region_id
+        dict['write_id'] = article.write_id
+        region = Region.query.filter_by(region_id=attraction.region_id).first()
+        dict['region_name'] = region.name
+        dict['date'] = article.date.strftime('%B %d, %Y')
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        user = User.query.filter_by(username=article.author_name).first()
+        dict['author_name'] = user.firstname + ' ' + user.lastname
+        dict['status'] = article.status
+        output.append(dict)
+    return jsonify({'post2': output})
+
+@app.route('/get/destination/byregion')
+@cross_origin('*')
+def get_destination_byregion():
+    data = request.get_json()
+    output = []
+
+    print data
+    region = Region.query.filter_by(name = data['title']).first()
+    destinations = Destination.query.join(Write).filter((Destination.region_id == region.region_id) & (Write.status == 'Posted')).all()
+
+    for destination in destinations:
+        dict = {}
+        article = Write.query.filter_by(write_id=destination.write_id).first()
+        dict['type'] = 'Destination'
+        dict['name'] = destination.name
+        dict['content'] = destination.content
+        dict['photo'] = destination.photo
+        dict['region_id'] = destination.region_id
+        region = Region.query.filter_by(region_id=destination.region_id).first()
+        dict['region_name'] = region.name
+        dict['write_id'] = article.write_id
+        dict['location'] = destination.location
+        dict['date'] = article.date.strftime('%B %d, %Y')
+        dict['author_id'] = article.author_id
+        dict['author_name'] = article.author_name
+        user = User.query.filter_by(username=article.author_name).first()
+        dict['author_name'] = user.firstname + ' ' + user.lastname
+        dict['status'] = article.status
+        output.append(dict)
+    return jsonify({'post3': output})
+
 @app.route('/get/all/user')
 @cross_origin('*')
 def get_all_users():
@@ -1690,7 +1760,7 @@ def get_notifications():
         dict['fullname'] = user.firstname + ' ' + user.lastname
         dict['profile'] = user.profile
         dict['write_id'] = notification.write_id
-        dict['date'] = notification.date.datetime().strftime('%d/%m/%y %I:%M')
+        dict['date'] = notification.date.strftime('%d/%m/%y %H:%M')
         if notification.last_open is None:
             dict['unread'] = 'True'
         else:
@@ -1720,7 +1790,7 @@ def get_notifications_writer():
     data = request.get_json()
     output = []
     user = User.query.filter_by(username=data['username']).first()
-    notifications = Notifications.query.filter((Notifications.user_id == user.id) & ((Notifications.status == 'returned') | (Notifications.status == 'checked'))).all()
+    notifications = Notifications.query.filter((Notifications.user_id == user.id) & ((Notifications.status == 'returned')) | ((Notifications.status == 'checked'))).order_by(desc(Notifications.notification_id)).all()
     notifications_unread = Notifications.query.filter(((Notifications.status == 'returned') | (Notifications.status == 'checked')) &
         ((Notifications.user_id == user.id) & (Notifications.last_open == None))).count()
     output2 = []
@@ -1735,7 +1805,7 @@ def get_notifications_writer():
         dict['fullname'] = user.firstname + ' ' + user.lastname
         dict['profile'] = user.profile
         dict['write_id'] = notification.write_id
-        dict['date'] = notification.date.strftime('%d/%m/%y %I:%M')
+        dict['date'] = notification.date.strftime('%d/%m/%y %H:%M')
         if notification.last_open is None:
             dict['unread'] = 'True'
         else:
@@ -1754,6 +1824,8 @@ def get_notifications_writer():
             dict['type'] = 'attraction'
             dict['name'] = attraction_check.name
         output.append(dict)
+    print output
+    print output2
     return jsonify({'notifications': output, 'count':output2})
 
 

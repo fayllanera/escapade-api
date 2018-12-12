@@ -22,7 +22,7 @@ class User(db.Model):
 class Write(db.Model):
     __tablename__ = 'write'
     write_id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.DateTime, default=datetime.datetime.now())
+    date = db.Column(db.DATE, default=datetime.datetime.now())
     author_id = db.Column(db.Integer,db.ForeignKey('user.id'))
     author_name = db.Column(db.VARCHAR)
     status = db.Column(db.VARCHAR)
