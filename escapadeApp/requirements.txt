@@ -19,7 +19,7 @@ facebook-sdk==2.0.0
 Flask==0.12.2
 Flask-Bootstrap==3.3.7.1
 Flask-Compress==1.4.0
-Flask-Cors==3.0.3
+Flask-Cors==3.0.9
 ## !! Could not determine repository location
 Flask-GoogleMaps==0.2.6
 Flask-HTTPAuth==3.2.3
