@@ -12,7 +12,7 @@ client==0.0.1
 configparser==3.5.0
 cryptography==2.2.1
 decorator==4.2.1
-Django==1.11.12
+Django==2.2.24
 dominate==2.3.1
 enum34==1.1.6
 facebook-sdk==2.0.0
