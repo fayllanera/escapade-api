@@ -57,7 +57,7 @@ openlibrary==0.0.1
 openlibrary-api==0.1.0
 packaging==16.8
 passlib==1.6.1
-pipenv==2018.11.26
+pipenv==2022.1.8
 psycopg2==2.7.4
 pyasn1==0.4.2
 pycparser==2.18
