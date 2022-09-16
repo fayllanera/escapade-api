@@ -47,7 +47,7 @@ itsdangerous==0.24
 Jinja==1.2
 Jinja2==2.10
 jsonpickle==0.9.6
-Mako==1.0.7
+Mako==1.2.2
 MarkupSafe==1.0
 mysql==0.0.1
 mysql-connector-python==8.0.5
